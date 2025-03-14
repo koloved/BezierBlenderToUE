@@ -1,16 +1,7 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "4.26",
+	"EngineAssociation": "5.5",
 	"Category": "",
 	"Description": "",
-	"Modules": [
-		{
-			"Name": "Spline",
-			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"AdditionalDependencies": [
-				"Engine"
-			]
-		}
-	]
+	"Modules": []
 }

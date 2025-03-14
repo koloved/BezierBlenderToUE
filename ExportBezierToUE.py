@@ -1,61 +1,76 @@
 bl_info = {
     "name": "Export BezierCSV for UE4",
-    "blender": (2, 80, 0),
+    "blender": (4, 3, 0),  # Updated for Blender 4.3
     "author": "Alex Z.",
     "location": "File > Export > BezierCSV For UE (.csv)",
     "category": "Import-Export",
 }
 
-import sys, getopt
 import os
 import bpy
-from bpy_extras.io_utils import ImportHelper
+from bpy_extras.io_utils import ExportHelper  # Changed to ExportHelper
+from bpy.props import StringProperty
 
-
-class ObjectExportPoints(bpy.types.Operator, ImportHelper):
+class ObjectExportPoints(bpy.types.Operator, ExportHelper):  # Now using ExportHelper
     bl_idname = "me.export_bezier_points" 
     bl_label = "Export BezierCSV to UE4"   
-    bl_options = {'REGISTER'} 
+    
+    # File type settings
+    filename_ext = ".csv"
+    filter_glob: StringProperty(
+        default="*.csv",
+        options={'HIDDEN'}
+    )
+    
+    SCALE_FACTOR = 100.0  # Centralized scale factor
     
     def execute(self, context):
-        obj = bpy.context.active_object
-        objType = bpy.context.object.type
-        
-        if objType == 'CURVE':
-            beziers = []
-                        
-            for subcurve in obj.data.splines:
-                if subcurve.type == 'BEZIER':
-                    beziers.append(subcurve)
-
-            if len(beziers) > 0:        
-                count = 1
-                saveFile = open(self.filepath + ".csv", "w")
-                saveFile.write("name,px,py,pz,hlx,hly,hlz,hrx,hry,hrz\n");
-                str = '%d,%f,%f,%f,%f,%f,%f,%f,%f,%f\n'
-            
-                for bezier in beziers:
-                    for point in bezier.bezier_points:
-                        line = str % (count, \
-                            point.co.x, -point.co.y, point.co.z, \
-                            point.handle_left.x, -point.handle_left.y, point.handle_left.z, \
-                            point.handle_right.x, -point.handle_right.y, point.handle_right.z)
-                        saveFile.write(line);
-                        count = count + 1
-            
-                saveFile.close()
-                self.report({"INFO"}, "The curve was exported")
-                return {'FINISHED'}
-            else:
-                self.report({"WARNING"}, "Selected object isn't a Bezier curve")
-                return {'CANCELLED'}                
-                
-        else:
+        obj = context.active_object
+        if not obj or obj.type != 'CURVE':
             self.report({"WARNING"}, "Selected object isn't a curve")
             return {'CANCELLED'}
 
+        beziers = [s for s in obj.data.splines if s.type == 'BEZIER']
+        if not beziers:
+            self.report({"WARNING"}, "Selected object isn't a Bezier curve")
+            return {'CANCELLED'}
+        
+        with open(self.filepath, "w") as save_file:  # Removed manual .csv append
+            save_file.write("name,px,py,pz,hlx,hly,hlz,hrx,hry,hrz\n")
+            
+            line_template = ("%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,"
+                           "%.6f,%.6f,%.6f\n")
+            
+            count = 1
+            for bezier in beziers:
+                for point in bezier.bezier_points:
+                    data = {
+                        'co': point.co * self.SCALE_FACTOR,
+                        'hl': point.handle_left * self.SCALE_FACTOR,
+                        'hr': point.handle_right * self.SCALE_FACTOR
+                    }
+                    
+                    line = line_template % (
+                        count,
+                        data['co'].x, 
+                        -data['co'].y,  # Flipping Y-axis for UE4
+                        data['co'].z,
+                        data['hl'].x,
+                        -data['hl'].y,   # Flipping Y-axis
+                        data['hl'].z,
+                        data['hr'].x,
+                        -data['hr'].y,   # Flipping Y-axis
+                        data['hr'].z
+                    )
+                    save_file.write(line)
+                    count += 1
+        
+        self.report({"INFO"}, f"Exported {count-1} points successfully")
+        return {'FINISHED'}
+
 def menu_func(self, context):
-    self.layout.operator(ObjectExportPoints.bl_idname,text="Export BezierCSV For UE4 (.csv)")
+    self.layout.operator(ObjectExportPoints.bl_idname, 
+                        text="Export BezierCSV For UE4 (.csv)")
 
 def register():
     bpy.utils.register_class(ObjectExportPoints)
